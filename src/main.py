@@ -18,8 +18,8 @@ import math
 
 start_time = time.time()
 pages = 0
-pdf_path = "pdf-data"
-output_path = "pdfplumber-output-xtolerance-1.5-doclaynet-with-mergeing"
+pdf_path = "/disk1/users/mbehret/data/dissertation-pdfs"
+output_path = "/disk1/users/mbehret/data/processed_dissertation_pdfs"
 pattern = re.compile(r"(.*verzeichnis(\n|$)|.*übersicht(\n|$)|.*\.\.\.\.|.*\. \. \. \.)")
 
 if not os.path.exists(output_path):

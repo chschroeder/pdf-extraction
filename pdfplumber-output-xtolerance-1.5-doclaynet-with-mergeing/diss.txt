@@ -471,7 +471,7 @@ FOOTNOTE:6: x ← x0)
 8: else
 
 
-9: σ ← σ c
+FOOTNOTE:9: σ ← σ c
 
 
 10: end if
