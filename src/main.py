@@ -4,6 +4,7 @@ import numpy as np
 import cv2 
 import re
 import logging
+import shutil
 
 from image_utils import boxOverlap, transform_coordinate_IMG2PDF, box_inside_box, xyxy_xywh, bounding_box_refinement, xywh_xyxy
 from extraction_utils import common_error_replacements, get_height_frequency, group_words, has_digit, is_digit, mark_footnote_start, mark_footnote_end, mark_superscript, get_bottom_coordinate_from_line
@@ -15,11 +16,12 @@ from typing import Dict, List
 from PIL.Image import Image as  ImageType
 import time
 import math
+import glob
 
 start_time = time.time()
 pages = 0
-pdf_path = "/disk1/users/mbehret/data/dissertation-pdfs"
-output_path = "/disk1/users/mbehret/data/processed_dissertation_pdfs"
+pdf_path = "/disk1/users/mbehret/data/dissertation-pdfs-deduplicated"
+output_path = "/disk1/users/mbehret/data/dissertation-txts-processed"
 pattern = re.compile(r"(.*verzeichnis(\n|$)|.*übersicht(\n|$)|.*\.\.\.\.|.*\. \. \. \.)")
 
 if not os.path.exists(output_path):
@@ -39,7 +41,7 @@ FONT_MARGIN = 0.05
 X_TOLERANCE = 1.5 # 1.5 for 200 DPI
 Y_TOLERANCE = 3.5 # 3.5 for 200 DPI
 START_PAGE = 0 # set to None for whole document
-END_PAGE = 50 # set to None for whole document
+END_PAGE = None # set to None for whole document
 SUPERSCRIPT_MARKER = "$$$"
 LOG_FILENAME = "debug.log"
 
@@ -105,10 +107,10 @@ def visualize_page_layout(detection_list: List[Dict], images: List[ImageType], i
                 )
                 numpy_image = cv2.rectangle(numpy_image, (xmin, ymin), (xmax, ymax), color_map[detections["class"][j]], 2)
 
-            if not os.path.exists(save_path):
-                os.mkdir(save_path)
+            #if not os.path.exists(save_path): #uncomment to create directories to save pngs
+            #    os.mkdir(save_path)
             #Image.fromarray(numpy_image).show()
-            Image.fromarray(numpy_image).save(f"{save_path}/image_{index+1}.png")
+            #Image.fromarray(numpy_image).save(f"{save_path}/image_{index+1}.png") #uncomment to save pngs
 
 
 def deduplicate_detections(detections: List, images: List) -> List: 
@@ -213,8 +215,14 @@ def process_pdf(filepath: str, images: List) -> str:
             rect, bbox = bounding_box_refinement(numpy_image, None, crop_box_xywh, True)
             crop_box_extended = xywh_xyxy(bbox)
             pdf_coordinates = [transform_coordinate_IMG2PDF(c, DPI) for c in crop_box_extended]
-            pdf_coordinates = [pdf_coordinates[0], pdf_coordinates[1], pdf_coordinates[2], pdf_coordinates[3]]
-            cropped_page = pdf_page.crop(pdf_coordinates)
+            # Ensure that pdf_coordinates has valid values
+            if pdf_coordinates[0] != pdf_coordinates[2] and pdf_coordinates[1] != pdf_coordinates[3]:
+                # If pdf_coordinates are valid, proceed with cropping
+                cropped_page = pdf_page.crop(pdf_coordinates)
+            else:
+                # If pdf_coordinates have zero area, skip cropping
+                LOGGER.warning(f"Bounding box {pdf_coordinates} has an area of zero. Skipping cropping.")
+
             text_from_box = cropped_page.extract_text(x_tolerance=X_TOLERANCE, y_tolerance=Y_TOLERANCE)
             if crop_box_xywh[3] <= (HEADER_SECTION_MAX_TITLE_HEIGHT_RATIO * numpy_image.shape[0]) and (crop_box_xywh[1] + crop_box_xywh[3]) <= 0.10 * numpy_image.shape[0]:
                 LOGGER.info(f"Skipping Textbox with text:\n{text_from_box}\nbecause its in the headersection on page {index+1}")
@@ -255,7 +263,7 @@ def process_pdf(filepath: str, images: List) -> str:
                 
             text_block = common_error_replacements(text_block)
             fulltext += f"{text_block}\n\n"
-            print(text_block)
+            #print(text_block) #uncomment to print text block in terminal
 
         visualize_page_layout(filtered_detections, images, index, os.path.join(output_path, pdf_file.replace(".pdf", "")))
     return fulltext, pages
