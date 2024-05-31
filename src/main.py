@@ -5,6 +5,7 @@ import cv2
 import re
 import logging
 import shutil
+import psutil
 
 from image_utils import boxOverlap, transform_coordinate_IMG2PDF, box_inside_box, xyxy_xywh, bounding_box_refinement, xywh_xyxy
 from extraction_utils import common_error_replacements, get_height_frequency, group_words, has_digit, is_digit, mark_footnote_start, mark_footnote_end, mark_superscript, get_bottom_coordinate_from_line
@@ -18,14 +19,23 @@ import time
 import math
 import glob
 
+# Function to check current memory usage
+def get_memory_usage():
+    return psutil.virtual_memory().used
+
+# Threshold in bytes (110 GB)
+MEMORY_THRESHOLD = 110 * 1024**3
+
 start_time = time.time()
 pages = 0
-pdf_path = "/disk1/users/mbehret/data/dissertation-pdfs-deduplicated"
+pdf_path = "/disk1/users/mbehret/data/dissertation-pdfs-deduplicated-modified"
 output_path = "/disk1/users/mbehret/data/dissertation-txts-processed"
 pattern = re.compile(r"(.*verzeichnis(\n|$)|.*übersicht(\n|$)|.*\.\.\.\.|.*\. \. \. \.)")
 
 if not os.path.exists(output_path):
     os.mkdir(output_path)
+
+processed_files_file = "/disk1/users/mbehret/PycharmProjects/pdf-extraction/processed_files.txt"
 
 # only keep relevant classes ->
 # caption (0), footnote (1), formula (2),
@@ -45,6 +55,11 @@ END_PAGE = None # set to None for whole document
 SUPERSCRIPT_MARKER = "$$$"
 LOG_FILENAME = "debug.log"
 
+# Load processed filenames if the file exists
+processed_files = set()
+if os.path.exists(processed_files_file):
+    with open(processed_files_file, "r") as f:
+        processed_files = set(f.read().splitlines())
 
 total_pages = 0
 if os.path.exists(LOG_FILENAME):
@@ -195,6 +210,10 @@ def process_pdf(filepath: str, images: List) -> str:
         pdf_page = pdf_doc.pages[index]
         numpy_image = np.array(images[index])
         text = pdf_page.extract_text(x_tolerance=X_TOLERANCE, y_tolerance=Y_TOLERANCE)
+
+        pdf_page.flush_cache()
+        pdf_page.get_textmap.cache_clear()
+
         if pattern.search(text) or text == "":
             continue
 
@@ -265,13 +284,28 @@ def process_pdf(filepath: str, images: List) -> str:
             fulltext += f"{text_block}\n\n"
             #print(text_block) #uncomment to print text block in terminal
 
+        # Monitor memory usage every 5 pages
+        if (index + 1) % 5 == 0 and get_memory_usage() > MEMORY_THRESHOLD:
+            LOGGER.warning(
+                f"Memory usage exceeded the threshold during processing of {filepath}. Skipping the rest of this file.")
+            break
+
         visualize_page_layout(filtered_detections, images, index, os.path.join(output_path, pdf_file.replace(".pdf", "")))
     return fulltext, pages
+
 
 
 for pdf_file in os.listdir(pdf_path):
     # if pdf_file != "Dissertation_Dejnega.pdf":
     #     continue
+    if pdf_file in processed_files:
+        LOGGER.info(f"PDF file {pdf_file} has already been processed. Skipping.")
+        continue
+
+    if get_memory_usage() > MEMORY_THRESHOLD:
+        LOGGER.warning(f"Memory usage exceeded the threshold before processing {pdf_file}. Skipping this file.")
+        continue
+
     LOGGER.info(f"processing pdf file {pdf_file}")
     filtered_text = ""  
     filepath = os.path.join(pdf_path, pdf_file)
@@ -282,7 +316,8 @@ for pdf_file in os.listdir(pdf_path):
         with open(os.path.join(output_path, pdf_file.replace(".pdf", ".txt")), "w") as f:
             f.write(fulltext)
     except Exception as e:
-        LOGGER.exception(e.with_traceback())    
+        LOGGER.exception(e.with_traceback())
 
 end_time = time.time()
+
 LOGGER.info(f"Processing took {end_time-start_time} seconds, for {len(os.listdir(pdf_path))} PDF and {total_pages} Pages.")
