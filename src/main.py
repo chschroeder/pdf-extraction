@@ -23,8 +23,8 @@ import glob
 def get_memory_usage():
     return psutil.virtual_memory().used
 
-# Threshold in bytes (110 GB)
-MEMORY_THRESHOLD = 110 * 1024**3
+# Threshold in bytes (100 GB)
+MEMORY_THRESHOLD = 100 * 1024**3
 
 start_time = time.time()
 pages = 0
@@ -178,7 +178,6 @@ def deduplicate_detections(detections: List, images: List) -> List:
     return filtered_detections
 
 
-
 def get_pdf_fontsize_statistic(pdf_doc, num_pages) -> Dict:
     n_pages = num_pages // 2
     middle_page = (len(pdf_doc.pages) // 2) // 2
@@ -284,8 +283,8 @@ def process_pdf(filepath: str, images: List) -> str:
             fulltext += f"{text_block}\n\n"
             #print(text_block) #uncomment to print text block in terminal
 
-        # Monitor memory usage every 5 pages
-        if (index + 1) % 5 == 0 and get_memory_usage() > MEMORY_THRESHOLD:
+        # Monitor memory usage every 20 pages
+        if (index + 1) % 20 == 0 and get_memory_usage() > MEMORY_THRESHOLD:
             LOGGER.warning(
                 f"Memory usage exceeded the threshold during processing of {filepath}. Skipping the rest of this file.")
             break
@@ -310,7 +309,12 @@ for pdf_file in os.listdir(pdf_path):
     filtered_text = ""  
     filepath = os.path.join(pdf_path, pdf_file)
     images = convert_from_path(filepath, DPI, first_page=START_PAGE, last_page=END_PAGE)
+
     try:
+        images = convert_from_path(filepath, DPI, first_page=START_PAGE, last_page=END_PAGE)
+        if not images or any(img is None for img in images):
+            LOGGER.warning(f"Empty or invalid images encountered for {pdf_file}. Skipping this file.")
+            continue
         fulltext, processed_pages = process_pdf(filepath, images)
         total_pages += processed_pages
         with open(os.path.join(output_path, pdf_file.replace(".pdf", ".txt")), "w") as f:
