@@ -32,9 +32,10 @@ def bounding_box_refinement(
     x, y, w, h = box
 
     if expansion:
-        x, y, w, h = bounding_box_expansion(x, y, w, h)
+        x, y, w, h = bounding_box_expansion(x, y, w, h, img.shape[0]-1, img.shape[1]-1)
 
     bounding_box = img[y : y + h, x : x + w]
+
 
     x_edge, y_edge, w_edge, h_edge = edge_detection(bounding_box)
 
@@ -47,9 +48,13 @@ def bounding_box_refinement(
     return rect, bbox
 
 
-def bounding_box_expansion(x: int, y: int, w: int, h: int, length: int = 4) -> Tuple[int, int, int, int]:
+def bounding_box_expansion(x: int, y: int, w: int, h: int, w_max: int, h_max: int, length: int = 4) -> Tuple[int, int, int, int]:
     """Expands the bounding box"""
-    return x - length, y - length, w + 2 * length, h + 2 * length
+
+    return (min(max(x-length, 0), w_max),
+            min(max(y - length, 0), h_max),
+            min(w + 2 * length, w_max),
+            min(h + 2 * length, h_max))
 
 
 def edge_detection(img: ndarray) -> Tuple[int, int, int, int]:
