@@ -297,9 +297,9 @@ def process_pdf(filepath: str, images: List) -> str:
 for pdf_file in os.listdir(pdf_path):
     # if pdf_file != "Dissertation_Dejnega.pdf":
     #     continue
-    #if pdf_file in processed_files:
-    #    LOGGER.info(f"PDF file {pdf_file} has already been processed. Skipping.")
-    #    continue
+    if pdf_file in processed_files:
+        LOGGER.info(f"PDF file {pdf_file} has already been processed. Skipping.")
+        continue
 
     if get_memory_usage() > MEMORY_THRESHOLD:
         LOGGER.warning(f"Memory usage exceeded the threshold before processing {pdf_file}. Skipping this file.")
